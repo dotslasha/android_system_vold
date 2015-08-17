@@ -3181,7 +3181,7 @@ int cryptfs_enable_internal(char *howarg, int crypt_type, char *passwd,
         property_set("vold.encrypt_progress", "0");
 
         /* restart the framework. */
-        /* Create necessary paths on /data *
+        /* Create necessary paths on /data */
         if (prep_data_fs()) {
             goto error_shutting_down;
         }
