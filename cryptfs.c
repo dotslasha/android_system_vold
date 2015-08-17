@@ -3178,7 +3178,7 @@ int cryptfs_enable_internal(char *howarg, int crypt_type, char *passwd,
         }
 
         /* Tells the framework that inplace encryption is starting */
-        property_set("vold.encrypt_progress", "0";
+        property_set("vold.encrypt_progress", "0");
 
         /* restart the framework. */
         /* Create necessary paths on /data *
@@ -3191,7 +3191,7 @@ int cryptfs_enable_internal(char *howarg, int crypt_type, char *passwd,
          * shut down before proceeding.  Without it, some devices cannot
          * restart the graphics services.
          */
-            sleep(2)
+        sleep(2);
     }
 
     /* Start the actual work of making an encrypted filesystem */
