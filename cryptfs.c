@@ -139,7 +139,7 @@ static int keymaster_check_compatibility()
     int rc = 0;
 
     if (keymaster_init(&keymaster_dev)) {
-        SLOGE("Failed to init keymaster");
+        SLOGE("CRYPTFS: Failed to init keymaster");
         rc = -1;
         goto out;
     }
@@ -173,7 +173,7 @@ static int keymaster_create_key(struct crypt_mnt_ftr *ftr)
     keymaster_device_t *keymaster_dev = 0;
 
     if (keymaster_init(&keymaster_dev)) {
-        SLOGE("Failed to init keymaster");
+        SLOGE("CRYPTFS: Failed to init keymaster");
         return -1;
     }
 
@@ -187,13 +187,13 @@ static int keymaster_create_key(struct crypt_mnt_ftr *ftr)
     size_t key_size;
     if (keymaster_dev->generate_keypair(keymaster_dev, TYPE_RSA, &params,
                                         &key, &key_size)) {
-        SLOGE("Failed to generate keypair");
+        SLOGE("CRYPTFS: Failed to generate keypair");
         rc = -1;
         goto out;
     }
 
     if (key_size > KEYMASTER_BLOB_SIZE) {
-        SLOGE("Keymaster key too large for crypto footer");
+        SLOGE("CRYPTFS: Keymaster key too large for crypto footer");
         rc = -1;
         goto out;
     }
@@ -221,7 +221,7 @@ static int keymaster_sign_object(struct crypt_mnt_ftr *ftr,
     int rc = 0;
     keymaster_device_t *keymaster_dev = 0;
     if (keymaster_init(&keymaster_dev)) {
-        SLOGE("Failed to init keymaster");
+        SLOGE("CRYPTFS: Failed to init keymaster");
         return -1;
     }
 
@@ -280,7 +280,7 @@ static int keymaster_sign_object(struct crypt_mnt_ftr *ftr,
             SLOGI("Signing safely-padded object");
             break;
         default:
-            SLOGE("Unknown KDF type %d", ftr->kdf_type);
+            SLOGE("CRYPTFS: Unknown KDF type %d", ftr->kdf_type);
             return -1;
     }
 
@@ -412,24 +412,24 @@ static unsigned int get_fs_size(char *dev)
     off64_t len;
 
     if ((fd = open(dev, O_RDONLY)) < 0) {
-        SLOGE("Cannot open device to get filesystem size ");
+        SLOGE("CRYPTFS: Cannot open device to get filesystem size ");
         return 0;
     }
 
     if (lseek64(fd, 1024, SEEK_SET) < 0) {
-        SLOGE("Cannot seek to superblock");
+        SLOGE("CRYPTFS: Cannot seek to superblock");
         return 0;
     }
 
     if (read(fd, &sb, sizeof(sb)) != sizeof(sb)) {
-        SLOGE("Cannot read superblock");
+        SLOGE("CRYPTFS: Cannot read superblock");
         return 0;
     }
 
     close(fd);
 
     if (le32_to_cpu(sb.s_magic) != EXT4_SUPER_MAGIC) {
-        SLOGE("Not a valid ext4 superblock");
+        SLOGE("CRYPTFS: Not a valid ext4 superblock");
         return 0;
     }
     block_size = 1024 << sb.s_log_block_size;
@@ -456,7 +456,7 @@ static int get_crypt_ftr_info(char **metadata_fname, off64_t *off)
 
     if (!strcmp(key_loc, KEY_IN_FOOTER)) {
       if ( (fd = open(real_blkdev, O_RDWR)) < 0) {
-        SLOGE("Cannot open real block device %s\n", real_blkdev);
+        SLOGE("CRYPTFS: Cannot open real block device %s\n", real_blkdev);
         return -1;
       }
 
@@ -469,7 +469,7 @@ static int get_crypt_ftr_info(char **metadata_fname, off64_t *off)
         cached_off = ((off64_t)nr_sec * 512) - CRYPT_FOOTER_OFFSET;
         cached_data = 1;
       } else {
-        SLOGE("Cannot get size of block device %s\n", real_blkdev);
+        SLOGE("CRYPTFS: Cannot get size of block device %s\n", real_blkdev);
       }
       close(fd);
     } else {
@@ -508,26 +508,26 @@ static int put_crypt_ftr_and_key(struct crypt_mnt_ftr *crypt_ftr)
   struct stat statbuf;
 
   if (get_crypt_ftr_info(&fname, &starting_off)) {
-    SLOGE("Unable to get crypt_ftr_info\n");
+    SLOGE("CRYPTFS: Unable to get crypt_ftr_info\n");
     return -1;
   }
   if (fname[0] != '/') {
-    SLOGE("Unexpected value for crypto key location\n");
+    SLOGE("CRYPTFS: Unexpected value for crypto key location\n");
     return -1;
   }
   if ( (fd = open(fname, O_RDWR | O_CREAT, 0600)) < 0) {
-    SLOGE("Cannot open footer file %s for put\n", fname);
+    SLOGE("CRYPTFS: Cannot open footer file %s for put\n", fname);
     return -1;
   }
 
   /* Seek to the start of the crypt footer */
   if (lseek64(fd, starting_off, SEEK_SET) == -1) {
-    SLOGE("Cannot seek to real block device footer\n");
+    SLOGE("CRYPTFS: Cannot seek to real block device footer\n");
     goto errout;
   }
 
   if ((cnt = write(fd, crypt_ftr, sizeof(struct crypt_mnt_ftr))) != sizeof(struct crypt_mnt_ftr)) {
-    SLOGE("Cannot write real block device footer\n");
+    SLOGE("CRYPTFS: Cannot write real block device footer\n");
     goto errout;
   }
 
@@ -535,7 +535,7 @@ static int put_crypt_ftr_and_key(struct crypt_mnt_ftr *crypt_ftr)
   /* If the keys are kept on a raw block device, do not try to truncate it. */
   if (S_ISREG(statbuf.st_mode)) {
     if (ftruncate(fd, 0x4000)) {
-      SLOGE("Cannot set footer file size\n");
+      SLOGE("CRYPTFS: Cannot set footer file size\n");
       goto errout;
     }
   }
@@ -584,14 +584,14 @@ static void upgrade_crypt_ftr(int fd, struct crypt_mnt_ftr *crypt_ftr, off64_t o
 
         pdata = malloc(CRYPT_PERSIST_DATA_SIZE);
         if (pdata == NULL) {
-            SLOGE("Cannot allocate persisent data\n");
+            SLOGE("CRYPTFS: Cannot allocate persisent data\n");
             return;
         }
         memset(pdata, 0, CRYPT_PERSIST_DATA_SIZE);
 
         /* Need to initialize the persistent data area */
         if (lseek64(fd, pdata_offset, SEEK_SET) == -1) {
-            SLOGE("Cannot seek to persisent data offset\n");
+            SLOGE("CRYPTFS: Cannot seek to persisent data offset\n");
             free(pdata);
             return;
         }
@@ -628,7 +628,7 @@ static void upgrade_crypt_ftr(int fd, struct crypt_mnt_ftr *crypt_ftr, off64_t o
 
     if ((orig_major != crypt_ftr->major_version) || (orig_minor != crypt_ftr->minor_version)) {
         if (lseek64(fd, offset, SEEK_SET) == -1) {
-            SLOGE("Cannot seek to crypt footer\n");
+            SLOGE("CRYPTFS: Cannot seek to crypt footer\n");
             return;
         }
         unix_write(fd, crypt_ftr, sizeof(struct crypt_mnt_ftr));
@@ -646,43 +646,43 @@ static int get_crypt_ftr_and_key(struct crypt_mnt_ftr *crypt_ftr)
   struct stat statbuf;
 
   if (get_crypt_ftr_info(&fname, &starting_off)) {
-    SLOGE("Unable to get crypt_ftr_info\n");
+    SLOGE("CRYPTFS: Unable to get crypt_ftr_info\n");
     return -1;
   }
   if (fname[0] != '/') {
-    SLOGE("Unexpected value for crypto key location\n");
+    SLOGE("CRYPTFS: Unexpected value for crypto key location\n");
     return -1;
   }
   if ( (fd = open(fname, O_RDWR)) < 0) {
-    SLOGE("Cannot open footer file %s for get\n", fname);
+    SLOGE("CRYPTFS: Cannot open footer file %s for get\n", fname);
     return -1;
   }
 
   /* Make sure it's 16 Kbytes in length */
   fstat(fd, &statbuf);
   if (S_ISREG(statbuf.st_mode) && (statbuf.st_size != 0x4000)) {
-    SLOGE("footer file %s is not the expected size!\n", fname);
+    SLOGE("CRYPTFS: footer file %s is not the expected size!\n", fname);
     goto errout;
   }
 
   /* Seek to the start of the crypt footer */
   if (lseek64(fd, starting_off, SEEK_SET) == -1) {
-    SLOGE("Cannot seek to real block device footer\n");
+    SLOGE("CRYPTFS: Cannot seek to real block device footer\n");
     goto errout;
   }
 
   if ( (cnt = read(fd, crypt_ftr, sizeof(struct crypt_mnt_ftr))) != sizeof(struct crypt_mnt_ftr)) {
-    SLOGE("Cannot read real block device footer\n");
+    SLOGE("CRYPTFS: Cannot read real block device footer\n");
     goto errout;
   }
 
   if (crypt_ftr->magic != CRYPT_MNT_MAGIC) {
-    SLOGE("Bad magic for real block device %s\n", fname);
+    SLOGE("CRYPTFS: Bad magic for real block device %s\n", fname);
     goto errout;
   }
 
   if (crypt_ftr->major_version != CURRENT_MAJOR_VERSION) {
-    SLOGE("Cannot understand major version %d real block device footer; expected %d\n",
+    SLOGE("CRYPTFS: Cannot understand major version %d real block device footer; expected %d\n",
           crypt_ftr->major_version, CURRENT_MAJOR_VERSION);
     goto errout;
   }
@@ -711,19 +711,19 @@ static int validate_persistent_data_storage(struct crypt_mnt_ftr *crypt_ftr)
 {
     if (crypt_ftr->persist_data_offset[0] + crypt_ftr->persist_data_size >
         crypt_ftr->persist_data_offset[1]) {
-        SLOGE("Crypt_ftr persist data regions overlap");
+        SLOGE("CRYPTFS: Crypt_ftr persist data regions overlap");
         return -1;
     }
 
     if (crypt_ftr->persist_data_offset[0] >= crypt_ftr->persist_data_offset[1]) {
-        SLOGE("Crypt_ftr persist data region 0 starts after region 1");
+        SLOGE("CRYPTFS: Crypt_ftr persist data region 0 starts after region 1");
         return -1;
     }
 
     if (((crypt_ftr->persist_data_offset[1] + crypt_ftr->persist_data_size) -
         (crypt_ftr->persist_data_offset[0] - CRYPT_FOOTER_TO_PERSIST_OFFSET)) >
         CRYPT_FOOTER_OFFSET) {
-        SLOGE("Persistent data extends past crypto footer");
+        SLOGE("CRYPTFS: Persistent data extends past crypto footer");
         return -1;
     }
 
@@ -765,7 +765,7 @@ static int load_persistent_data(void)
 
     if ((crypt_ftr.major_version < 1)
         || (crypt_ftr.major_version == 1 && crypt_ftr.minor_version < 1)) {
-        SLOGE("Crypt_ftr version doesn't support persistent data");
+        SLOGE("CRYPTFS: Crypt_ftr version doesn't support persistent data");
         return -1;
     }
 
@@ -780,25 +780,25 @@ static int load_persistent_data(void)
 
     fd = open(fname, O_RDONLY);
     if (fd < 0) {
-        SLOGE("Cannot open %s metadata file", fname);
+        SLOGE("CRYPTFS: Cannot open %s metadata file", fname);
         return -1;
     }
 
     if (persist_data == NULL) {
         pdata = malloc(crypt_ftr.persist_data_size);
         if (pdata == NULL) {
-            SLOGE("Cannot allocate memory for persistent data");
+            SLOGE("CRYPTFS: Cannot allocate memory for persistent data");
             goto err;
         }
     }
 
     for (i = 0; i < 2; i++) {
         if (lseek64(fd, crypt_ftr.persist_data_offset[i], SEEK_SET) < 0) {
-            SLOGE("Cannot seek to read persistent data on %s", fname);
+            SLOGE("CRYPTFS: Cannot seek to read persistent data on %s", fname);
             goto err2;
         }
         if (unix_read(fd, pdata, crypt_ftr.persist_data_size) < 0){
-            SLOGE("Error reading persistent data on iteration %d", i);
+            SLOGE("CRYPTFS: Error reading persistent data on iteration %d", i);
             goto err2;
         }
         if (pdata->persist_magic == PERSIST_DATA_MAGIC) {
@@ -837,7 +837,7 @@ static int save_persistent_data(void)
     int ret;
 
     if (persist_data == NULL) {
-        SLOGE("No persistent data to save");
+        SLOGE("CRYPTFS: No persistent data to save");
         return -1;
     }
 
@@ -847,7 +847,7 @@ static int save_persistent_data(void)
 
     if ((crypt_ftr.major_version < 1)
         || (crypt_ftr.major_version == 1 && crypt_ftr.minor_version < 1)) {
-        SLOGE("Crypt_ftr version doesn't support persistent data");
+        SLOGE("CRYPTFS: Crypt_ftr version doesn't support persistent data");
         return -1;
     }
 
@@ -862,23 +862,23 @@ static int save_persistent_data(void)
 
     fd = open(fname, O_RDWR);
     if (fd < 0) {
-        SLOGE("Cannot open %s metadata file", fname);
+        SLOGE("CRYPTFS: Cannot open %s metadata file", fname);
         return -1;
     }
 
     pdata = malloc(crypt_ftr.persist_data_size);
     if (pdata == NULL) {
-        SLOGE("Cannot allocate persistant data");
+        SLOGE("CRYPTFS: Cannot allocate persistant data");
         goto err;
     }
 
     if (lseek64(fd, crypt_ftr.persist_data_offset[0], SEEK_SET) < 0) {
-        SLOGE("Cannot seek to read persistent data on %s", fname);
+        SLOGE("CRYPTFS: Cannot seek to read persistent data on %s", fname);
         goto err2;
     }
 
     if (unix_read(fd, pdata, crypt_ftr.persist_data_size) < 0) {
-            SLOGE("Error reading persistent data before save");
+            SLOGE("CRYPTFS: Error reading persistent data before save");
             goto err2;
     }
 
@@ -896,25 +896,25 @@ static int save_persistent_data(void)
 
     /* Write the new copy first, if successful, then erase the old copy */
     if (lseek64(fd, write_offset, SEEK_SET) < 0) {
-        SLOGE("Cannot seek to write persistent data");
+        SLOGE("CRYPTFS: Cannot seek to write persistent data");
         goto err2;
     }
     if (unix_write(fd, persist_data, crypt_ftr.persist_data_size) ==
         (int) crypt_ftr.persist_data_size) {
         if (lseek64(fd, erase_offset, SEEK_SET) < 0) {
-            SLOGE("Cannot seek to erase previous persistent data");
+            SLOGE("CRYPTFS: Cannot seek to erase previous persistent data");
             goto err2;
         }
         fsync(fd);
         memset(pdata, 0, crypt_ftr.persist_data_size);
         if (unix_write(fd, pdata, crypt_ftr.persist_data_size) !=
             (int) crypt_ftr.persist_data_size) {
-            SLOGE("Cannot write to erase previous persistent data");
+            SLOGE("CRYPTFS: Cannot write to erase previous persistent data");
             goto err2;
         }
         fsync(fd);
     } else {
-        SLOGE("Cannot write to save persistent data");
+        SLOGE("CRYPTFS: Cannot write to save persistent data");
         goto err2;
     }
 
@@ -946,13 +946,13 @@ static unsigned char* convert_hex_ascii_to_key(const char* master_key_ascii,
 
     size_t size = strlen (master_key_ascii);
     if (size % 2) {
-        SLOGE("Trying to convert ascii string of odd length");
+        SLOGE("CRYPTFS: Trying to convert ascii string of odd length");
         return NULL;
     }
 
     unsigned char* master_key = (unsigned char*) malloc(size / 2);
     if (master_key == 0) {
-        SLOGE("Cannot allocate");
+        SLOGE("CRYPTFS: Cannot allocate");
         return NULL;
     }
 
@@ -961,7 +961,7 @@ static unsigned char* convert_hex_ascii_to_key(const char* master_key_ascii,
         int low_nibble = hexdigit (master_key_ascii[i + 1]);
 
         if(high_nibble < 0 || low_nibble < 0) {
-            SLOGE("Invalid hex string");
+            SLOGE("CRYPTFS: Invalid hex string");
             free (master_key);
             return NULL;
         }
@@ -1119,7 +1119,7 @@ static int create_crypto_blk_dev(struct crypt_mnt_ftr *crypt_ftr, unsigned char 
 #endif
 
   if ((fd = open("/dev/device-mapper", O_RDWR)) < 0 ) {
-    SLOGE("Cannot open device-mapper\n");
+    SLOGE("CRYPTFS: Cannot open device-mapper\n");
     goto errout;
   }
 
@@ -1127,14 +1127,14 @@ static int create_crypto_blk_dev(struct crypt_mnt_ftr *crypt_ftr, unsigned char 
 
   ioctl_init(io, DM_CRYPT_BUF_SIZE, name, 0);
   if (ioctl(fd, DM_DEV_CREATE, io)) {
-    SLOGE("Cannot create dm-crypt device\n");
+    SLOGE("CRYPTFS: Cannot create dm-crypt device\n");
     goto errout;
   }
 
   /* Get the device status, in particular, the name of it's device file */
   ioctl_init(io, DM_CRYPT_BUF_SIZE, name, 0);
   if (ioctl(fd, DM_DEV_STATUS, io)) {
-    SLOGE("Cannot retrieve dm-crypt device status\n");
+    SLOGE("CRYPTFS: Cannot retrieve dm-crypt device status\n");
     goto errout;
   }
   minor = (io->dev & 0xff) | ((io->dev >> 12) & 0xfff00);
@@ -1167,7 +1167,7 @@ static int create_crypto_blk_dev(struct crypt_mnt_ftr *crypt_ftr, unsigned char 
   load_count = load_crypto_mapping_table(crypt_ftr, master_key, real_blk_name, name,
                                          fd, extra_params);
   if (load_count < 0) {
-      SLOGE("Cannot load dm-crypt mapping table.\n");
+      SLOGE("CRYPTFS: Cannot load dm-crypt mapping table.\n");
       goto errout;
   } else if (load_count > 1) {
       SLOGI("Took %d tries to load dmcrypt table.\n", load_count);
@@ -1177,7 +1177,7 @@ static int create_crypto_blk_dev(struct crypt_mnt_ftr *crypt_ftr, unsigned char 
   ioctl_init(io, DM_CRYPT_BUF_SIZE, name, 0);
 
   if (ioctl(fd, DM_DEV_SUSPEND, io)) {
-    SLOGE("Cannot resume the dm-crypt device\n");
+    SLOGE("CRYPTFS: Cannot resume the dm-crypt device\n");
     goto errout;
   }
 
@@ -1198,7 +1198,7 @@ static int delete_crypto_blk_dev(char *name)
   int retval = -1;
 
   if ((fd = open("/dev/device-mapper", O_RDWR)) < 0 ) {
-    SLOGE("Cannot open device-mapper\n");
+    SLOGE("CRYPTFS: Cannot open device-mapper\n");
     goto errout;
   }
 
@@ -1206,7 +1206,7 @@ static int delete_crypto_blk_dev(char *name)
 
   ioctl_init(io, DM_CRYPT_BUF_SIZE, name, 0);
   if (ioctl(fd, DM_DEV_REMOVE, io)) {
-    SLOGE("Cannot remove dm-crypt device\n");
+    SLOGE("CRYPTFS: Cannot remove dm-crypt device\n");
     goto errout;
   }
 
@@ -1277,7 +1277,7 @@ static int scrypt_keymaster(const char *passwd, const unsigned char *salt,
 
     unsigned char* master_key = convert_hex_ascii_to_key(passwd, &key_size);
     if (!master_key) {
-        SLOGE("Failed to convert passwd from hex");
+        SLOGE("CRYPTFS: Failed to convert passwd from hex");
         return -1;
     }
 
@@ -1287,13 +1287,13 @@ static int scrypt_keymaster(const char *passwd, const unsigned char *salt,
     free(master_key);
 
     if (rc) {
-        SLOGE("scrypt failed");
+        SLOGE("CRYPTFS: scrypt failed");
         return -1;
     }
 
     if (keymaster_sign_object(ftr, ikey, KEY_LEN_BYTES + IV_LEN_BYTES,
                               &signature, &signature_size)) {
-        SLOGE("Signing failed");
+        SLOGE("CRYPTFS: Signing failed");
         return -1;
     }
 
@@ -1302,7 +1302,7 @@ static int scrypt_keymaster(const char *passwd, const unsigned char *salt,
     free(signature);
 
     if (rc) {
-        SLOGE("scrypt failed");
+        SLOGE("CRYPTFS: scrypt failed");
         return -1;
     }
 
@@ -1327,31 +1327,31 @@ static int encrypt_master_key(const char *passwd, const unsigned char *salt,
     case KDF_SCRYPT_KEYMASTER_BADLY_PADDED:
     case KDF_SCRYPT_KEYMASTER:
         if (keymaster_create_key(crypt_ftr)) {
-            SLOGE("keymaster_create_key failed");
+            SLOGE("CRYPTFS: keymaster_create_key failed");
             return -1;
         }
 
         if (scrypt_keymaster(passwd, salt, ikey, crypt_ftr)) {
-            SLOGE("scrypt failed");
+            SLOGE("CRYPTFS: scrypt failed");
             return -1;
         }
         break;
 
     case KDF_SCRYPT:
         if (scrypt(passwd, salt, ikey, crypt_ftr)) {
-            SLOGE("scrypt failed");
+            SLOGE("CRYPTFS: scrypt failed");
             return -1;
         }
         break;
 
     default:
-        SLOGE("Invalid kdf_type");
+        SLOGE("CRYPTFS: Invalid kdf_type");
         return -1;
     }
 
     /* Initialize the decryption engine */
     if (! EVP_EncryptInit(&e_ctx, EVP_aes_128_cbc(), ikey, ikey+KEY_LEN_BYTES)) {
-        SLOGE("EVP_EncryptInit failed\n");
+        SLOGE("CRYPTFS: EVP_EncryptInit failed\n");
         return -1;
     }
     EVP_CIPHER_CTX_set_padding(&e_ctx, 0); /* Turn off padding as our data is block aligned */
@@ -1359,16 +1359,16 @@ static int encrypt_master_key(const char *passwd, const unsigned char *salt,
     /* Encrypt the master key */
     if (! EVP_EncryptUpdate(&e_ctx, encrypted_master_key, &encrypted_len,
                               decrypted_master_key, KEY_LEN_BYTES)) {
-        SLOGE("EVP_EncryptUpdate failed\n");
+        SLOGE("CRYPTFS: EVP_EncryptUpdate failed\n");
         return -1;
     }
     if (! EVP_EncryptFinal(&e_ctx, encrypted_master_key + encrypted_len, &final_len)) {
-        SLOGE("EVP_EncryptFinal failed\n");
+        SLOGE("CRYPTFS: EVP_EncryptFinal failed\n");
         return -1;
     }
 
     if (encrypted_len + final_len != KEY_LEN_BYTES) {
-        SLOGE("EVP_Encryption length check failed with %d, %d bytes\n", encrypted_len, final_len);
+        SLOGE("CRYPTFS: EVP_Encryption length check failed with %d, %d bytes\n", encrypted_len, final_len);
         return -1;
     }
 
@@ -1387,7 +1387,7 @@ static int encrypt_master_key(const char *passwd, const unsigned char *salt,
                        sizeof(crypt_ftr->scrypted_intermediate_key));
 
     if (rc) {
-      SLOGE("encrypt_master_key: crypto_scrypt failed");
+      SLOGE("CRYPTFS: encrypt_master_key: crypto_scrypt failed");
     }
 
     return 0;
@@ -1407,7 +1407,7 @@ static int decrypt_master_key_aux(char *passwd, unsigned char *salt,
   /* Turn the password into an intermediate key and IV that can decrypt the
      master key */
   if (kdf(passwd, salt, ikey, kdf_params)) {
-    SLOGE("kdf failed");
+    SLOGE("CRYPTFS: kdf failed");
     return -1;
   }
 
@@ -1533,7 +1533,7 @@ static int wait_and_unmount(char *mountpoint, bool kill)
       rc = 0;
     } else {
       vold_killProcessesWithOpenFiles(mountpoint, 0);
-      SLOGE("unmounting %s failed: %s\n", mountpoint, strerror(err));
+      SLOGE("CRYPTFS: unmounting %s failed: %s\n", mountpoint, strerror(err));
       rc = -1;
     }
 
@@ -1563,7 +1563,7 @@ static int prep_data_fs(void)
     }
     if (i == DATA_PREP_TIMEOUT) {
         /* Ugh, we failed to prep /data in time.  Bail. */
-        SLOGE("post_fs_data timed out!\n");
+        SLOGE("CRYPTFS: post_fs_data timed out!\n");
         return -1;
     } else {
         SLOGD("post_fs_data done\n");
@@ -1576,13 +1576,13 @@ static void cryptfs_set_corrupt()
     // Mark the footer as bad
     struct crypt_mnt_ftr crypt_ftr;
     if (get_crypt_ftr_and_key(&crypt_ftr)) {
-        SLOGE("Failed to get crypto footer - panic");
+        SLOGE("CRYPTFS: Failed to get crypto footer - panic");
         return;
     }
 
     crypt_ftr.flags |= CRYPT_DATA_CORRUPT;
     if (put_crypt_ftr_and_key(&crypt_ftr)) {
-        SLOGE("Failed to set crypto footer - panic");
+        SLOGE("CRYPTFS: Failed to set crypto footer - panic");
         return;
     }
 }
@@ -1590,17 +1590,17 @@ static void cryptfs_set_corrupt()
 static void cryptfs_trigger_restart_min_framework()
 {
     if (fs_mgr_do_tmpfs_mount(DATA_MNT_POINT)) {
-      SLOGE("Failed to mount tmpfs on data - panic");
+      SLOGE("CRYPTFS: Failed to mount tmpfs on data - panic");
       return;
     }
 
     if (property_set("vold.decrypt", "trigger_post_fs_data")) {
-        SLOGE("Failed to trigger post fs data - panic");
+        SLOGE("CRYPTFS: Failed to trigger post fs data - panic");
         return;
     }
 
     if (property_set("vold.decrypt", "trigger_restart_min_framework")) {
-        SLOGE("Failed to trigger restart min framework - panic");
+        SLOGE("CRYPTFS: Failed to trigger restart min framework - panic");
         return;
     }
 }
@@ -1619,12 +1619,12 @@ static int cryptfs_restart_internal(int restart_main)
 
     /* Validate that it's OK to call this routine */
     if (! master_key_saved) {
-        SLOGE("Encrypted filesystem not validated, aborting");
+        SLOGE("CRYPTFS: Encrypted filesystem not validated, aborting");
         return -1;
     }
 
     if (restart_successful) {
-        SLOGE("System already restarted with encrypted disk, aborting");
+        SLOGE("CRYPTFS: System already restarted with encrypted disk, aborting");
         return -1;
     }
 
@@ -1663,7 +1663,7 @@ static int cryptfs_restart_internal(int restart_main)
 
     property_get("ro.crypto.fs_crypto_blkdev", crypto_blkdev, "");
     if (strlen(crypto_blkdev) == 0) {
-        SLOGE("fs_crypto_blkdev not set\n");
+        SLOGE("CRYPTFS: fs_crypto_blkdev not set\n");
         return -1;
     }
 
@@ -1699,7 +1699,7 @@ static int cryptfs_restart_internal(int restart_main)
                     cryptfs_reboot(reboot);
                 }
             } else {
-                SLOGE("Failed to mount decrypted data");
+                SLOGE("CRYPTFS: Failed to mount decrypted data");
                 cryptfs_set_corrupt();
                 cryptfs_trigger_restart_min_framework();
                 SLOGI("Started framework to offer wipe");
@@ -1742,7 +1742,7 @@ static int do_crypto_complete(char *mount_point UNUSED)
 
   property_get("ro.crypto.state", encrypted_state, "");
   if (strcmp(encrypted_state, "encrypted") ) {
-    SLOGE("not running with encryption, aborting");
+    SLOGE("CRYPTFS: not running with encryption, aborting");
     return CRYPTO_COMPLETE_NOT_ENCRYPTED;
   }
 
@@ -1757,27 +1757,27 @@ static int do_crypto_complete(char *mount_point UNUSED)
      * device" screen.
      */
     if ((key_loc[0] == '/') && (access("key_loc", F_OK) == -1)) {
-      SLOGE("master key file does not exist, aborting");
+      SLOGE("CRYPTFS: master key file does not exist, aborting");
       return CRYPTO_COMPLETE_NOT_ENCRYPTED;
     } else {
-      SLOGE("Error getting crypt footer and key\n");
+      SLOGE("CRYPTFS: Error getting crypt footer and key\n");
       return CRYPTO_COMPLETE_BAD_METADATA;
     }
   }
 
   // Test for possible error flags
   if (crypt_ftr.flags & CRYPT_ENCRYPTION_IN_PROGRESS){
-    SLOGE("Encryption process is partway completed\n");
+    SLOGE("CRYPTFS: Encryption process is partway completed\n");
     return CRYPTO_COMPLETE_PARTIAL;
   }
 
   if (crypt_ftr.flags & CRYPT_INCONSISTENT_STATE){
-    SLOGE("Encryption process was interrupted but cannot continue\n");
+    SLOGE("CRYPTFS: Encryption process was interrupted but cannot continue\n");
     return CRYPTO_COMPLETE_INCONSISTENT;
   }
 
   if (crypt_ftr.flags & CRYPT_DATA_CORRUPT){
-    SLOGE("Encryption is successful but data is corrupt\n");
+    SLOGE("CRYPTFS: Encryption is successful but data is corrupt\n");
     return CRYPTO_COMPLETE_CORRUPT;
   }
 
@@ -1808,7 +1808,7 @@ static int test_mount_encrypted_fs(struct crypt_mnt_ftr* crypt_ftr,
   if (! (crypt_ftr->flags & CRYPT_MNT_KEY_UNENCRYPTED) ) {
     if (decrypt_master_key(passwd, decrypted_master_key, crypt_ftr,
                            &intermediate_key, &intermediate_key_size)) {
-      SLOGE("Failed to decrypt master key\n");
+      SLOGE("CRYPTFS: Failed to decrypt master key\n");
       rc = -1;
       goto errout;
     }
@@ -1828,7 +1828,7 @@ static int test_mount_encrypted_fs(struct crypt_mnt_ftr* crypt_ftr,
 #if 0
         if (create_crypto_blk_dev(crypt_ftr, &key_index,
                             real_blkdev, crypto_blkdev, label)) {
-          SLOGE("Error creating decrypted block device\n");
+          SLOGE("CRYPTFS: Error creating decrypted block device\n");
           rc = -1;
           goto errout;
         }
@@ -1836,7 +1836,7 @@ static int test_mount_encrypted_fs(struct crypt_mnt_ftr* crypt_ftr,
       } else {
         if (create_crypto_blk_dev(crypt_ftr, decrypted_master_key,
                             real_blkdev, crypto_blkdev, label)) {
-          SLOGE("Error creating decrypted block device\n");
+          SLOGE("CRYPTFS: Error creating decrypted block device\n");
           rc = -1;
           goto errout;
         }
@@ -1849,7 +1849,7 @@ static int test_mount_encrypted_fs(struct crypt_mnt_ftr* crypt_ftr,
      */
     if (create_crypto_blk_dev(crypt_ftr, decrypted_master_key,
                             real_blkdev, crypto_blkdev, label)) {
-      SLOGE("Error creating decrypted block device\n");
+      SLOGE("CRYPTFS: Error creating decrypted block device\n");
       rc = -1;
       goto errout;
     }
@@ -1859,7 +1859,7 @@ static int test_mount_encrypted_fs(struct crypt_mnt_ftr* crypt_ftr,
   // need it
   if (create_crypto_blk_dev(crypt_ftr, decrypted_master_key,
                             real_blkdev, crypto_blkdev, label)) {
-     SLOGE("Error creating decrypted block device\n");
+     SLOGE("CRYPTFS: Error creating decrypted block device\n");
      rc = -1;
      goto errout;
   }
@@ -1889,7 +1889,7 @@ static int test_mount_encrypted_fs(struct crypt_mnt_ftr* crypt_ftr,
     sprintf(tmp_mount_point, "%s/tmp_mnt", mount_point);
     mkdir(tmp_mount_point, 0755);
     if (fs_mgr_do_mount(fstab, DATA_MNT_POINT, crypto_blkdev, tmp_mount_point)) {
-      SLOGE("Error temp mounting decrypted block device\n");
+      SLOGE("CRYPTFS: Error temp mounting decrypted block device\n");
       delete_crypto_blk_dev(label);
 
       rc = ++crypt_ftr->failed_decrypt_count;
@@ -1993,7 +1993,7 @@ int cryptfs_setup_volume(const char *label, int major, int minor,
     nr_sec = get_blkdev_size(fd);
     close(fd);
     if (nr_sec == 0) {
-        SLOGE("Cannot get size of volume %s\n", real_blkdev);
+        SLOGE("CRYPTFS: Cannot get size of volume %s\n", real_blkdev);
         return -1;
     }
 
@@ -2002,7 +2002,7 @@ int cryptfs_setup_volume(const char *label, int major, int minor,
                           crypto_blkdev, label);
 
     if (stat(crypto_blkdev, &statbuf) < 0) {
-        SLOGE("Error get stat for crypto_blkdev %s. err=%d(%s)\n",
+        SLOGE("CRYPTFS: Error get stat for crypto_blkdev %s. err=%d(%s)\n",
               crypto_blkdev, errno, strerror(errno));
     }
     *new_major = MAJOR(statbuf.st_rdev);
@@ -2024,13 +2024,13 @@ int check_unmounted_and_get_ftr(struct crypt_mnt_ftr* crypt_ftr)
     char encrypted_state[PROPERTY_VALUE_MAX];
     property_get("ro.crypto.state", encrypted_state, "");
     if ( master_key_saved || strcmp(encrypted_state, "encrypted") ) {
-        SLOGE("encrypted fs already validated or not running with encryption,"
+        SLOGE("CRYPTFS: encrypted fs already validated or not running with encryption,"
               " aborting");
         return -1;
     }
 
     if (get_crypt_ftr_and_key(crypt_ftr)) {
-        SLOGE("Error getting crypt footer and key");
+        SLOGE("CRYPTFS: Error getting crypt footer and key");
         return -1;
     }
 
@@ -2155,22 +2155,22 @@ int cryptfs_verify_passwd(char *passwd)
 
     property_get("ro.crypto.state", encrypted_state, "");
     if (strcmp(encrypted_state, "encrypted") ) {
-        SLOGE("device not encrypted, aborting");
+        SLOGE("CRYPTFS: device not encrypted, aborting");
         return -2;
     }
 
     if (!master_key_saved) {
-        SLOGE("encrypted fs not yet mounted, aborting");
+        SLOGE("CRYPTFS: encrypted fs not yet mounted, aborting");
         return -1;
     }
 
     if (!saved_mount_point) {
-        SLOGE("encrypted fs failed to save mount point, aborting");
+        SLOGE("CRYPTFS: encrypted fs failed to save mount point, aborting");
         return -1;
     }
 
     if (get_crypt_ftr_and_key(&crypt_ftr)) {
-        SLOGE("Error getting crypt footer and key\n");
+        SLOGE("CRYPTFS: Error getting crypt footer and key\n");
         return -1;
     }
 
@@ -2225,7 +2225,7 @@ static int cryptfs_init_crypt_mnt_ftr(struct crypt_mnt_ftr *ftr)
         break;
 
     default:
-        SLOGE("keymaster_check_compatibility failed");
+        SLOGE("CRYPTFS: keymaster_check_compatibility failed");
         return -1;
     }
 
@@ -2272,25 +2272,25 @@ static int cryptfs_enable_wipe(char *crypto_blkdev, off64_t size, int type)
         SLOGI("Making empty filesystem with command %s %s %s %s %s\n",
               args[0], args[1], args[2], args[3], args[4]);
     } else {
-        SLOGE("cryptfs_enable_wipe(): unknown filesystem type %d\n", type);
+        SLOGE("CRYPTFS: cryptfs_enable_wipe(): unknown filesystem type %d\n", type);
         return -1;
     }
 
     tmp = android_fork_execvp(num_args, (char **)args, &status, false, true);
 
     if (tmp != 0) {
-      SLOGE("Error creating empty filesystem on %s due to logwrap error\n", crypto_blkdev);
+      SLOGE("CRYPTFS: Error creating empty filesystem on %s due to logwrap error\n", crypto_blkdev);
     } else {
         if (WIFEXITED(status)) {
             if (WEXITSTATUS(status)) {
-                SLOGE("Error creating filesystem on %s, exit status %d ",
+                SLOGE("CRYPTFS: Error creating filesystem on %s, exit status %d ",
                       crypto_blkdev, WEXITSTATUS(status));
             } else {
                 SLOGD("Successfully created filesystem on %s\n", crypto_blkdev);
                 rc = 0;
             }
         } else {
-            SLOGE("Error creating filesystem on %s, did not exit normally\n", crypto_blkdev);
+            SLOGE("CRYPTFS: Error creating filesystem on %s, did not exit normally\n", crypto_blkdev);
        }
     }
 
@@ -2417,7 +2417,7 @@ static int flush_outstanding_data(struct encryptGroupsData* data)
     if (pread64(data->realfd, data->buffer,
                 info.block_size * data->count, data->offset)
         <= 0) {
-        SLOGE("Error reading real_blkdev %s for inplace encrypt",
+        SLOGE("CRYPTFS: Error reading real_blkdev %s for inplace encrypt",
               data->real_blkdev);
         return -1;
     }
@@ -2425,7 +2425,7 @@ static int flush_outstanding_data(struct encryptGroupsData* data)
     if (pwrite64(data->cryptofd, data->buffer,
                  info.block_size * data->count, data->offset)
         <= 0) {
-        SLOGE("Error writing crypto_blkdev %s for inplace encrypt",
+        SLOGE("CRYPTFS: Error writing crypto_blkdev %s for inplace encrypt",
               data->crypto_blkdev);
         return -1;
     } else {
@@ -2454,13 +2454,13 @@ static int encrypt_groups(struct encryptGroupsData* data)
 
     data->buffer = malloc(info.block_size * BLOCKS_AT_A_TIME);
     if (!data->buffer) {
-        SLOGE("Failed to allocate crypto buffer");
+        SLOGE("CRYPTFS: Failed to allocate crypto buffer");
         goto errout;
     }
 
     block_bitmap = malloc(info.block_size);
     if (!block_bitmap) {
-        SLOGE("failed to allocate block bitmap");
+        SLOGE("CRYPTFS: failed to allocate block bitmap");
         goto errout;
     }
 
@@ -2476,7 +2476,7 @@ static int encrypt_groups(struct encryptGroupsData* data)
 
         ret = pread64(data->realfd, block_bitmap, info.block_size, offset);
         if (ret != (int)info.block_size) {
-            SLOGE("failed to read all of block group bitmap %d", i);
+            SLOGE("CRYPTFS: failed to read all of block group bitmap %d", i);
             goto errout;
         }
 
@@ -2509,7 +2509,7 @@ static int encrypt_groups(struct encryptGroupsData* data)
             }
 
             if (!is_battery_ok_to_continue()) {
-                SLOGE("Stopping encryption due to low battery");
+                SLOGE("CRYPTFS: Stopping encryption due to low battery");
                 rc = 0;
                 goto errout;
             }
@@ -2551,7 +2551,7 @@ static int cryptfs_enable_inplace_ext4(char *crypto_blkdev,
     data.crypto_blkdev = crypto_blkdev;
 
     if ( (data.realfd = open(real_blkdev, O_RDWR)) < 0) {
-        SLOGE("Error opening real_blkdev %s for inplace encrypt. err=%d(%s)\n",
+        SLOGE("CRYPTFS: Error opening real_blkdev %s for inplace encrypt. err=%d(%s)\n",
               real_blkdev, errno, strerror(errno));
         rc = -1;
         goto errout;
@@ -2561,11 +2561,11 @@ static int cryptfs_enable_inplace_ext4(char *crypto_blkdev,
     int retries = RETRY_MOUNT_ATTEMPTS;
     while ((data.cryptofd = open(crypto_blkdev, O_WRONLY)) < 0) {
         if (--retries) {
-            SLOGE("Error opening crypto_blkdev %s for ext4 inplace encrypt. err=%d(%s), retrying\n",
+            SLOGE("CRYPTFS: Error opening crypto_blkdev %s for ext4 inplace encrypt. err=%d(%s), retrying\n",
                   crypto_blkdev, errno, strerror(errno));
             sleep(RETRY_MOUNT_DELAY_SECONDS);
         } else {
-            SLOGE("Error opening crypto_blkdev %s for ext4 inplace encrypt. err=%d(%s)\n",
+            SLOGE("CRYPTFS: Error opening crypto_blkdev %s for ext4 inplace encrypt. err=%d(%s)\n",
                   crypto_blkdev, errno, strerror(errno));
             rc = ENABLE_INPLACE_ERR_DEV;
             goto errout;
@@ -2573,13 +2573,13 @@ static int cryptfs_enable_inplace_ext4(char *crypto_blkdev,
     }
 
     if (setjmp(setjmp_env)) {
-        SLOGE("Reading ext4 extent caused an exception\n");
+        SLOGE("CRYPTFS: Reading ext4 extent caused an exception\n");
         rc = -1;
         goto errout;
     }
 
     if (read_ext(data.realfd, 0) != 0) {
-        SLOGE("Failed to read ext4 extent\n");
+        SLOGE("CRYPTFS: Failed to read ext4 extent\n");
         rc = -1;
         goto errout;
     }
@@ -2608,7 +2608,7 @@ static int cryptfs_enable_inplace_ext4(char *crypto_blkdev,
 
     rc = encrypt_groups(&data);
     if (rc) {
-        SLOGE("Error encrypting groups");
+        SLOGE("CRYPTFS: Error encrypting groups");
         goto errout;
     }
 
@@ -2656,12 +2656,12 @@ static int encrypt_one_block_f2fs(u64 pos, void *data)
     off64_t offset = pos * CRYPT_INPLACE_BUFSIZE;
 
     if (pread64(priv_dat->realfd, priv_dat->buffer, CRYPT_INPLACE_BUFSIZE, offset) <= 0) {
-        SLOGE("Error reading real_blkdev %s for f2fs inplace encrypt", priv_dat->crypto_blkdev);
+        SLOGE("CRYPTFS: Error reading real_blkdev %s for f2fs inplace encrypt", priv_dat->crypto_blkdev);
         return -1;
     }
 
     if (pwrite64(priv_dat->cryptofd, priv_dat->buffer, CRYPT_INPLACE_BUFSIZE, offset) <= 0) {
-        SLOGE("Error writing crypto_blkdev %s for f2fs inplace encrypt", priv_dat->crypto_blkdev);
+        SLOGE("CRYPTFS: Error writing crypto_blkdev %s for f2fs inplace encrypt", priv_dat->crypto_blkdev);
         return -1;
     } else {
         log_progress_f2fs(pos, false);
@@ -2691,12 +2691,12 @@ static int cryptfs_enable_inplace_f2fs(char *crypto_blkdev,
     data.realfd = -1;
     data.cryptofd = -1;
     if ( (data.realfd = open64(real_blkdev, O_RDWR)) < 0) {
-        SLOGE("Error opening real_blkdev %s for f2fs inplace encrypt\n",
+        SLOGE("CRYPTFS: Error opening real_blkdev %s for f2fs inplace encrypt\n",
               real_blkdev);
         goto errout;
     }
     if ( (data.cryptofd = open64(crypto_blkdev, O_WRONLY)) < 0) {
-        SLOGE("Error opening crypto_blkdev %s for f2fs inplace encrypt. err=%d(%s)\n",
+        SLOGE("CRYPTFS: Error opening crypto_blkdev %s for f2fs inplace encrypt. err=%d(%s)\n",
               crypto_blkdev, errno, strerror(errno));
         rc = ENABLE_INPLACE_ERR_DEV;
         goto errout;
@@ -2719,7 +2719,7 @@ static int cryptfs_enable_inplace_f2fs(char *crypto_blkdev,
 
     data.buffer = malloc(f2fs_info->block_size);
     if (!data.buffer) {
-        SLOGE("Failed to allocate crypto buffer");
+        SLOGE("CRYPTFS: Failed to allocate crypto buffer");
         goto errout;
     }
 
@@ -2729,7 +2729,7 @@ static int cryptfs_enable_inplace_f2fs(char *crypto_blkdev,
     rc = run_on_used_blocks(data.blocks_already_done, f2fs_info, &encrypt_one_block_f2fs, &data);
 
     if (rc) {
-        SLOGE("Error in running over f2fs blocks");
+        SLOGE("CRYPTFS: Error in running over f2fs blocks");
         rc = ENABLE_INPLACE_ERR_OTHER;
         goto errout;
     }
@@ -2739,7 +2739,7 @@ static int cryptfs_enable_inplace_f2fs(char *crypto_blkdev,
 
 errout:
     if (rc)
-        SLOGE("Failed to encrypt f2fs filesystem on %s", real_blkdev);
+        SLOGE("CRYPTFS: Failed to encrypt f2fs filesystem on %s", real_blkdev);
 
     log_progress_f2fs(0, true);
     free(f2fs_info);
@@ -2763,12 +2763,12 @@ static int cryptfs_enable_inplace_full(char *crypto_blkdev, char *real_blkdev,
     off64_t blocks_already_done, tot_numblocks;
 
     if ( (realfd = open(real_blkdev, O_RDONLY)) < 0) { 
-        SLOGE("Error opening real_blkdev %s for inplace encrypt\n", real_blkdev);
+        SLOGE("CRYPTFS: Error opening real_blkdev %s for inplace encrypt\n", real_blkdev);
         return ENABLE_INPLACE_ERR_OTHER;
     }
 
     if ( (cryptofd = open(crypto_blkdev, O_WRONLY)) < 0) { 
-        SLOGE("Error opening crypto_blkdev %s for inplace encrypt. err=%d(%s)\n",
+        SLOGE("CRYPTFS: Error opening crypto_blkdev %s for inplace encrypt. err=%d(%s)\n",
               crypto_blkdev, errno, strerror(errno));
         close(realfd);
         return ENABLE_INPLACE_ERR_DEV;
@@ -2784,28 +2784,28 @@ static int cryptfs_enable_inplace_full(char *crypto_blkdev, char *real_blkdev,
     tot_numblocks = tot_size / CRYPT_SECTORS_PER_BUFSIZE;
     blocks_already_done = *size_already_done / CRYPT_SECTORS_PER_BUFSIZE;
 
-    SLOGE("Encrypting filesystem in place...");
+    SLOGE("CRYPTFS: Encrypting filesystem in place...");
 
     i = previously_encrypted_upto + 1 - *size_already_done;
 
     if (lseek64(realfd, i * CRYPT_SECTOR_SIZE, SEEK_SET) < 0) {
-        SLOGE("Cannot seek to previously encrypted point on %s", real_blkdev);
+        SLOGE("CRYPTFS: Cannot seek to previously encrypted point on %s", real_blkdev);
         goto errout;
     }
 
     if (lseek64(cryptofd, i * CRYPT_SECTOR_SIZE, SEEK_SET) < 0) {
-        SLOGE("Cannot seek to previously encrypted point on %s", crypto_blkdev);
+        SLOGE("CRYPTFS: Cannot seek to previously encrypted point on %s", crypto_blkdev);
         goto errout;
     }
 
     for (;i < size && i % CRYPT_SECTORS_PER_BUFSIZE != 0; ++i) {
         if (unix_read(realfd, buf, CRYPT_SECTOR_SIZE) <= 0) {
-            SLOGE("Error reading initial sectors from real_blkdev %s for "
+            SLOGE("CRYPTFS: Error reading initial sectors from real_blkdev %s for "
                   "inplace encrypt\n", crypto_blkdev);
             goto errout;
         }
         if (unix_write(cryptofd, buf, CRYPT_SECTOR_SIZE) <= 0) {
-            SLOGE("Error writing initial sectors to crypto_blkdev %s for "
+            SLOGE("CRYPTFS: Error writing initial sectors to crypto_blkdev %s for "
                   "inplace encrypt\n", crypto_blkdev);
             goto errout;
         } else {
@@ -2826,11 +2826,11 @@ static int cryptfs_enable_inplace_full(char *crypto_blkdev, char *real_blkdev,
             property_set("vold.encrypt_progress", buf);
         }
         if (unix_read(realfd, buf, CRYPT_INPLACE_BUFSIZE) <= 0) {
-            SLOGE("Error reading real_blkdev %s for inplace encrypt", crypto_blkdev);
+            SLOGE("CRYPTFS: Error reading real_blkdev %s for inplace encrypt", crypto_blkdev);
             goto errout;
         }
         if (unix_write(cryptofd, buf, CRYPT_INPLACE_BUFSIZE) <= 0) {
-            SLOGE("Error writing crypto_blkdev %s for inplace encrypt", crypto_blkdev);
+            SLOGE("CRYPTFS: Error writing crypto_blkdev %s for inplace encrypt", crypto_blkdev);
             goto errout;
         } else {
             SLOGD("Encrypted %d block at %" PRId64,
@@ -2839,7 +2839,7 @@ static int cryptfs_enable_inplace_full(char *crypto_blkdev, char *real_blkdev,
         }
 
        if (!is_battery_ok_to_continue()) {
-            SLOGE("Stopping encryption due to low battery");
+            SLOGE("CRYPTFS: Stopping encryption due to low battery");
             *size_already_done += (i + 1) * CRYPT_SECTORS_PER_BUFSIZE - 1;
             rc = 0;
             goto errout;
@@ -2849,11 +2849,11 @@ static int cryptfs_enable_inplace_full(char *crypto_blkdev, char *real_blkdev,
     /* Do any remaining sectors */
     for (i=0; i<remainder; i++) {
         if (unix_read(realfd, buf, CRYPT_SECTOR_SIZE) <= 0) {
-            SLOGE("Error reading final sectors from real_blkdev %s for inplace encrypt", crypto_blkdev);
+            SLOGE("CRYPTFS: Error reading final sectors from real_blkdev %s for inplace encrypt", crypto_blkdev);
             goto errout;
         }
         if (unix_write(cryptofd, buf, CRYPT_SECTOR_SIZE) <= 0) {
-            SLOGE("Error writing final sectors to crypto_blkdev %s for inplace encrypt", crypto_blkdev);
+            SLOGE("CRYPTFS: Error writing final sectors to crypto_blkdev %s for inplace encrypt", crypto_blkdev);
             goto errout;
         } else {
             SLOGI("Encrypted 1 block at next location");
@@ -2933,14 +2933,14 @@ static int cryptfs_SHA256_fileblock(const char* filename, __le8* buf)
 {
     int fd = open(filename, O_RDONLY);
     if (fd == -1) {
-        SLOGE("Error opening file %s", filename);
+        SLOGE("CRYPTFS: Error opening file %s", filename);
         return -1;
     }
 
     char block[CRYPT_INPLACE_BUFSIZE];
     memset(block, 0, sizeof(block));
     if (unix_read(fd, block, sizeof(block)) < 0) {
-        SLOGE("Error reading file %s", filename);
+        SLOGE("CRYPTFS: Error reading file %s", filename);
         close(fd);
         return -1;
     }
@@ -2985,7 +2985,7 @@ static int cryptfs_enable_all_volumes(struct crypt_mnt_ftr *crypt_ftr, int how,
         struct fstab_rec* rec = fs_mgr_get_entry_for_mount_point(fstab, DATA_MNT_POINT);
         int fs_type = get_fs_type(rec);
         if (fs_type < 0) {
-            SLOGE("cryptfs_enable: unsupported fs type %s\n", rec->fs_type);
+            SLOGE("CRYPTFS: cryptfs_enable: unsupported fs type %s\n", rec->fs_type);
             return -1;
         }
         rc = cryptfs_enable_wipe(crypto_blkdev, crypt_ftr->fs_size, fs_type);
@@ -2997,7 +2997,7 @@ static int cryptfs_enable_all_volumes(struct crypt_mnt_ftr *crypt_ftr, int how,
 
         if (rc == ENABLE_INPLACE_ERR_DEV) {
             /* Hack for b/17898962 */
-            SLOGE("cryptfs_enable: crypto block dev failure. Must reboot...\n");
+            SLOGE("CRYPTFS: cryptfs_enable: crypto block dev failure. Must reboot...\n");
             cryptfs_reboot(reboot);
         }
 
@@ -3012,7 +3012,7 @@ static int cryptfs_enable_all_volumes(struct crypt_mnt_ftr *crypt_ftr, int how,
         }
     } else {
         /* Shouldn't happen */
-        SLOGE("cryptfs_enable: internal error, unknown option\n");
+        SLOGE("CRYPTFS: cryptfs_enable: internal error, unknown option\n");
         rc = -1;
     }
 
@@ -3069,7 +3069,7 @@ int cryptfs_enable_internal(char *howarg, int crypt_type, char *passwd,
 
     property_get("ro.crypto.state", encrypted_state, "");
     if (!strcmp(encrypted_state, "encrypted") && !previously_encrypted_upto) {
-        SLOGE("Device is already running encrypted, aborting");
+        SLOGE("CRYPTFS: Device is already running encrypted, aborting");
         goto error_unencrypted;
     }
 
@@ -3080,7 +3080,7 @@ int cryptfs_enable_internal(char *howarg, int crypt_type, char *passwd,
     /* Get the size of the real block device */
     fd = open(real_blkdev, O_RDONLY);
     if ( (nr_sec = get_blkdev_size(fd)) == 0) {
-        SLOGE("Cannot get size of block device %s\n", real_blkdev);
+        SLOGE("CRYPTFS: Cannot get size of block device %s\n", real_blkdev);
         goto error_unencrypted;
     }
     close(fd);
@@ -3095,7 +3095,7 @@ int cryptfs_enable_internal(char *howarg, int crypt_type, char *passwd,
         max_fs_size_sec = nr_sec - (CRYPT_FOOTER_OFFSET / CRYPT_SECTOR_SIZE);
 
         if (fs_size_sec > max_fs_size_sec) {
-            SLOGE("Orig filesystem overlaps crypto footer region.  Cannot encrypt in place.");
+            SLOGE("CRYPTFS: Orig filesystem overlaps crypto footer region.  Cannot encrypt in place.");
             goto error_unencrypted;
         }
     }
@@ -3126,7 +3126,7 @@ int cryptfs_enable_internal(char *howarg, int crypt_type, char *passwd,
 
     for (i=0; i<num_vols; i++) {
         if (should_encrypt(&vol_list[i])) {
-            SLOGE("Cannot encrypt if there are multiple encryptable volumes"
+            SLOGE("CRYPTFS: Cannot encrypt if there are multiple encryptable volumes"
                   "%s\n", vol_list[i].label);
             goto error_unencrypted;
         }
@@ -3142,7 +3142,7 @@ int cryptfs_enable_internal(char *howarg, int crypt_type, char *passwd,
         /* Just report the error.  If any are left mounted,
          * umounting /data below will fail and handle the error.
          */
-        SLOGE("Error unmounting internal asecs");
+        SLOGE("CRYPTFS: Error unmounting internal asecs");
     }
 
     property_get("ro.crypto.fuse_sdcard", fuse_sdcard, "");
@@ -3216,6 +3216,7 @@ int cryptfs_enable_internal(char *howarg, int crypt_type, char *passwd,
 #ifndef CONFIG_HW_DISK_ENCRYPTION
         strlcpy((char *)crypt_ftr.crypto_type_name, "aes-cbc-essiv:sha256", MAX_CRYPTO_TYPE_NAME_LEN);
 #else
+	SLOGE("CRYPTFS: CONFIG_HW enabled!");
         strlcpy((char *)crypt_ftr.crypto_type_name, "aes-xts", MAX_CRYPTO_TYPE_NAME_LEN);
         wipe_hw_device_encryption_key((char*)crypt_ftr.crypto_type_name);
         key_index = set_hw_device_encryption_key(passwd, (char*)crypt_ftr.crypto_type_name);
@@ -3225,13 +3226,13 @@ int cryptfs_enable_internal(char *howarg, int crypt_type, char *passwd,
 
         /* Make an encrypted master key */
         if (create_encrypted_random_key(passwd, crypt_ftr.master_key, crypt_ftr.salt, &crypt_ftr)) {
-            SLOGE("Cannot create encrypted master key\n");
+            SLOGE("CRYPTFS: Cannot create encrypted master key\n");
             goto error_shutting_down;
         }
 
         /* Write the key to the end of the partition */
         if (put_crypt_ftr_and_key(&crypt_ftr)) {
-            SLOGE("Error writing the key to the end of the partition\n");
+            SLOGE("CRYPTFS: Error writing the key to the end of the partition\n");
             goto error_shutting_down;
         }
 
@@ -3265,13 +3266,16 @@ int cryptfs_enable_internal(char *howarg, int crypt_type, char *passwd,
     decrypt_master_key(passwd, decrypted_master_key, &crypt_ftr, 0, 0);
 #ifdef CONFIG_HW_DISK_ENCRYPTION
     if (is_hw_disk_encryption((char*)crypt_ftr.crypto_type_name) && is_ice_enabled()) {
+      SLOGE("CRYPTFS: entrou if, bad!");
 #if 0
       create_crypto_blk_dev(&crypt_ftr, &key_index, real_blkdev, crypto_blkdev,
                           "userdata");
 #endif
-     } else
+     } else {
+      SLOGE("CRYPTFS: nao entrou if, ok!");
       create_crypto_blk_dev(&crypt_ftr, decrypted_master_key, real_blkdev, crypto_blkdev,
                           "userdata");
+     }
 
 #else
     create_crypto_blk_dev(&crypt_ftr, decrypted_master_key, real_blkdev, crypto_blkdev,
@@ -3286,7 +3290,7 @@ int cryptfs_enable_internal(char *howarg, int crypt_type, char *passwd,
 
         if (!rc && memcmp(hash_first_block, crypt_ftr.hash_first_block,
                           sizeof(hash_first_block)) != 0) {
-            SLOGE("Checksums do not match - trigger wipe");
+            SLOGE("CRYPTFS: Checksums do not match - trigger wipe");
             rc = -1;
         }
     }
@@ -3303,7 +3307,7 @@ int cryptfs_enable_internal(char *howarg, int crypt_type, char *passwd,
         rc = cryptfs_SHA256_fileblock(crypto_blkdev,
                                       crypt_ftr.hash_first_block);
         if (rc) {
-            SLOGE("Error calculating checksum for continuing encryption");
+            SLOGE("CRYPTFS: Error calculating checksum for continuing encryption");
             rc = -1;
         }
     }
@@ -3353,7 +3357,7 @@ int cryptfs_enable_internal(char *howarg, int crypt_type, char *passwd,
         property_get("ro.vold.wipe_on_crypt_fail", value, "0");
         if (!strcmp(value, "1")) {
             /* wipe data if encryption failed */
-            SLOGE("encryption failed - rebooting into recovery to wipe data\n");
+            SLOGE("CRYPTFS: encryption failed - rebooting into recovery to wipe data\n");
             mkdir("/cache/recovery", 0700);
             int fd = open("/cache/recovery/command", O_RDWR|O_CREAT|O_TRUNC, 0600);
             if (fd >= 0) {
@@ -3361,7 +3365,7 @@ int cryptfs_enable_internal(char *howarg, int crypt_type, char *passwd,
                 write(fd, "--reason=cryptfs_enable_internal\n", strlen("--reason=cryptfs_enable_internal\n") + 1);
                 close(fd);
             } else {
-                SLOGE("could not open /cache/recovery/command\n");
+                SLOGE("CRYPTFS: could not open /cache/recovery/command\n");
             }
             cryptfs_reboot(recovery);
         } else {
@@ -3393,7 +3397,7 @@ error_shutting_down:
      * but the framework is stopped and not restarted to show the error, so it's up to
      * vold to restart the system.
      */
-    SLOGE("Error enabling encryption after framework is shutdown, no data changed, restarting system");
+    SLOGE("CRYPTFS: Error enabling encryption after framework is shutdown, no data changed, restarting system");
     cryptfs_reboot(reboot);
 
     /* shouldn't get here */
@@ -3442,7 +3446,7 @@ int cryptfs_pfe_activate(void)
 
         /* get the footer */
         if (get_crypt_ftr_and_key(&crypt_ftr)) {
-            SLOGE("Error getting crypt footer");
+            SLOGE("CRYPTFS: Error getting crypt footer");
             return -1;
         }
 
@@ -3451,7 +3455,7 @@ int cryptfs_pfe_activate(void)
 
         /* save the flag in the footer */
         if (put_crypt_ftr_and_key(&crypt_ftr)) {
-            SLOGE("Error saving crypt footer");
+            SLOGE("CRYPTFS: Error saving crypt footer");
             return -1;
         }
 
@@ -3470,7 +3474,7 @@ int cryptfs_pfe_activate(void)
     /* Get the size of the real block device */
     fd = open(real_blkdev, O_RDONLY);
     if ( (nr_sec = get_blkdev_size(fd)) == 0) {
-        SLOGE("Cannot get size of block device %s", real_blkdev);
+        SLOGE("CRYPTFS: Cannot get size of block device %s", real_blkdev);
         goto get_size_error;
     }
     close(fd);
@@ -3495,12 +3499,12 @@ int cryptfs_pfe_activate(void)
         /* Just report the error.  If any are left mounted,
          * umounting /data below will fail and handle the error.
          */
-        SLOGE("Error unmounting internal asecs");
+        SLOGE("CRYPTFS: Error unmounting internal asecs");
     }
 
     /* Now unmount the /data partition. */
     if (wait_and_unmount(DATA_MNT_POINT, false)) {
-        SLOGE("%s: Unmount /data failed", __func__);
+        SLOGE("CRYPTFS: %s: Unmount /data failed", __func__);
         goto unmount_error;
     }
 
@@ -3521,7 +3525,7 @@ int cryptfs_pfe_activate(void)
     rc = create_crypto_blk_dev(&crypt_ftr, decrypted_master_key,
                                real_blkdev, crypto_blkdev, "userdata");
     if (rc) {
-        SLOGE("%s: Create crypto block-device failed !", __func__);
+        SLOGE("CRYPTFS: %s: Create crypto block-device failed !", __func__);
         goto mapping_err;
     }
 
@@ -3531,7 +3535,7 @@ int cryptfs_pfe_activate(void)
     while (retry) {
         rc = fs_mgr_do_mount(fstab, DATA_MNT_POINT, crypto_blkdev, 0);
         if (rc) {
-            SLOGE("%s: Mount /data to crypto device FAILED !", __func__);
+            SLOGE("CRYPTFS: %s: Mount /data to crypto device FAILED !", __func__);
             if (retry == 0) {
                 goto mapping_err;
             }
@@ -3546,7 +3550,7 @@ int cryptfs_pfe_activate(void)
     property_set("vold.decrypt", "trigger_load_persist_props");
     /* Create necessary paths on /data */
     if (prep_data_fs()) {
-        SLOGE("%s: prep_data_fs() FAILED !", __func__);
+        SLOGE("CRYPTFS: %s: prep_data_fs() FAILED !", __func__);
         goto mapping_err;
     }
 
@@ -3592,7 +3596,7 @@ int cryptfs_pfe_deactivate(void)
 
     /* get the footer */
     if (get_crypt_ftr_and_key(&crypt_ftr)) {
-        SLOGE("Error getting crypt footer");
+        SLOGE("CRYPTFS: Error getting crypt footer");
         return -1;
     }
 
@@ -3601,7 +3605,7 @@ int cryptfs_pfe_deactivate(void)
 
     /* save the footer */
     if (put_crypt_ftr_and_key(&crypt_ftr)) {
-        SLOGE("Error saving crypt footer");
+        SLOGE("CRYPTFS: Error saving crypt footer");
         return -1;
     }
 
@@ -3627,12 +3631,12 @@ int cryptfs_pfe_boot(void)
     SLOGI("Check if PFE is activated on Boot");
 
     if (get_crypt_ftr_and_key(&crypt_ftr)) {
-        SLOGE("Error getting crypt footer and key");
+        SLOGE("CRYPTFS: Error getting crypt footer and key");
         goto exit_err;
     }
 
     if (!(crypt_ftr.flags & CRYPT_PFE_ACTIVATED) ) {
-        SLOGE("PFE not activated");
+        SLOGE("CRYPTFS: PFE not activated");
         goto exit_err;
     }
 
@@ -3675,18 +3679,18 @@ int cryptfs_changepw(int crypt_type, const char *newpw)
 
     /* This is only allowed after we've successfully decrypted the master key */
     if (!master_key_saved) {
-        SLOGE("Key not saved, aborting");
+        SLOGE("CRYPTFS: Key not saved, aborting");
         return -1;
     }
 
     if (crypt_type < 0 || crypt_type > CRYPT_TYPE_MAX_TYPE) {
-        SLOGE("Invalid crypt_type %d", crypt_type);
+        SLOGE("CRYPTFS: Invalid crypt_type %d", crypt_type);
         return -1;
     }
 
     /* get key */
     if (get_crypt_ftr_and_key(&crypt_ftr)) {
-        SLOGE("Error getting crypt footer and key");
+        SLOGE("CRYPTFS: Error getting crypt footer and key");
         return -1;
     }
 
@@ -3703,13 +3707,13 @@ int cryptfs_changepw(int crypt_type, const char *newpw)
                        saved_master_key,
                        crypt_ftr.master_key,
                        &crypt_ftr)) {
-        SLOGE("Error encrypting master key");
+        SLOGE("CRYPTFS: Error encrypting master key");
         return -1;
     }
 
     /* save the key */
     if (put_crypt_ftr_and_key(&crypt_ftr)) {
-        SLOGE("Failed to save key");
+        SLOGE("CRYPTFS: Failed to save key");
         return -1;
     }
 
@@ -3916,7 +3920,7 @@ int cryptfs_getfield(const char *fieldname, char *value, int len)
     if (persist_data == NULL) {
         load_persistent_data();
         if (persist_data == NULL) {
-            SLOGE("Getfield error, cannot load persistent data");
+            SLOGE("CRYPTFS: Getfield error, cannot load persistent data");
             goto out;
         }
     }
@@ -3979,7 +3983,7 @@ int cryptfs_setfield(const char *fieldname, const char *value)
     if (persist_data == NULL) {
         load_persistent_data();
         if (persist_data == NULL) {
-            SLOGE("Setfield error, cannot load persistent data");
+            SLOGE("CRYPTFS: Setfield error, cannot load persistent data");
             goto out;
         }
     }
@@ -4021,7 +4025,7 @@ int cryptfs_setfield(const char *fieldname, const char *value)
 
     if (persist_set_key(fieldname, value, encrypted)) {
         // fail to set key, should not happen as we have already checked the available space
-        SLOGE("persist_set_key() error during setfield()");
+        SLOGE("CRYPTFS: persist_set_key() error during setfield()");
         goto out;
     }
 
@@ -4030,7 +4034,7 @@ int cryptfs_setfield(const char *fieldname, const char *value)
 
         if (persist_set_key(temp_field, value + field_id * (PROPERTY_VALUE_MAX - 1), encrypted)) {
             // fail to set key, should not happen as we have already checked the available space.
-            SLOGE("persist_set_key() error during setfield()");
+            SLOGE("CRYPTFS: persist_set_key() error during setfield()");
             goto out;
         }
     }
@@ -4038,7 +4042,7 @@ int cryptfs_setfield(const char *fieldname, const char *value)
     /* If we are running encrypted, save the persistent data now */
     if (encrypted) {
         if (save_persistent_data()) {
-            SLOGE("Setfield error, cannot save persistent data");
+            SLOGE("CRYPTFS: Setfield error, cannot save persistent data");
             goto out;
         }
     }
@@ -4059,11 +4063,11 @@ int cryptfs_mount_default_encrypted(void)
     char decrypt_state[PROPERTY_VALUE_MAX];
     property_get("vold.decrypt", decrypt_state, "0");
     if (!strcmp(decrypt_state, "0")) {
-        SLOGE("Not encrypted - should not call here");
+        SLOGE("CRYPTFS: Not encrypted - should not call here");
     } else {
         int crypt_type = cryptfs_get_password_type();
         if (crypt_type < 0 || crypt_type > CRYPT_TYPE_MAX_TYPE) {
-            SLOGE("Bad crypt type - error");
+            SLOGE("CRYPTFS: Bad crypt type - error");
         } else if (crypt_type != CRYPT_TYPE_DEFAULT) {
             SLOGD("Password is not default - "
                   "starting min framework to prompt");
@@ -4074,7 +4078,7 @@ int cryptfs_mount_default_encrypted(void)
             cryptfs_restart_internal(0);
             return 0;
         } else {
-            SLOGE("Encrypted, default crypt type but can't decrypt");
+            SLOGE("CRYPTFS: Encrypted, default crypt type but can't decrypt");
         }
     }
 
@@ -4092,7 +4096,7 @@ int cryptfs_get_password_type(void)
     struct crypt_mnt_ftr crypt_ftr;
 
     if (get_crypt_ftr_and_key(&crypt_ftr)) {
-        SLOGE("Error getting crypt footer and key\n");
+        SLOGE("CRYPTFS: Error getting crypt footer and key\n");
         return -1;
     }
 
